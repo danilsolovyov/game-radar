@@ -1,0 +1,166 @@
+name: Tag Build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Wails CLI
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          $gobin = Join-Path (go env GOPATH) "bin"
+          $gobin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build Wails app with tag version
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ github.ref_name }}
+        run: wails build -ldflags "-X main.appVersion=$env:APP_VERSION"
+
+      - name: Sign Windows binary
+        shell: pwsh
+        env:
+          WIN_SIGNING_CERT: ${{ secrets.WIN_SIGNING_CERT }}
+          WIN_SIGNING_CERT_PASSWORD: ${{ secrets.WIN_SIGNING_CERT_PASSWORD }}
+          WIN_SIGNING_TIMESTAMP_URL: ${{ vars.WIN_SIGNING_TIMESTAMP_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WIN_SIGNING_CERT)) {
+            throw "Не найден секрет WIN_SIGNING_CERT."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:WIN_SIGNING_CERT_PASSWORD)) {
+            throw "Не найден секрет WIN_SIGNING_CERT_PASSWORD."
+          }
+
+          $timestampUrl = if ([string]::IsNullOrWhiteSpace($env:WIN_SIGNING_TIMESTAMP_URL)) {
+            "http://ts.ssl.com"
+          } else {
+            $env:WIN_SIGNING_TIMESTAMP_URL
+          }
+
+          New-Item -ItemType Directory -Path certificate -Force | Out-Null
+          try {
+            $certBase64 = ($env:WIN_SIGNING_CERT -replace '\s', '')
+            $certBytes = [Convert]::FromBase64String($certBase64)
+            [IO.File]::WriteAllBytes("certificate\certificate.pfx", $certBytes)
+          } catch {
+            throw "Не удалось декодировать сертификат подписи из base64."
+          }
+
+          $exePath = Join-Path $PWD "build\bin\game-radar.exe"
+          if (-not (Test-Path $exePath)) {
+            throw "Не найден бинарник для подписи: $exePath"
+          }
+
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if (-not $signtool) {
+            throw "signtool.exe не найден на runner."
+          }
+
+          $signOutput = & $signtool.FullName sign /fd sha256 /td sha256 /tr $timestampUrl /f certificate\certificate.pfx /p "$env:WIN_SIGNING_CERT_PASSWORD" $exePath 2>&1
+          $signExitCode = $LASTEXITCODE
+          if ($signExitCode -ne 0) {
+            $signText = ($signOutput | Out-String)
+            if ($signText -match 'not trusted by the trust provider') {
+              Write-Warning "Подпись self-signed: runner не доверяет корню, но файл подписан."
+            } else {
+              throw "Подпись бинарника завершилась ошибкой."
+            }
+          }
+
+          $verifyOutput = & $signtool.FullName verify /pa /v $exePath 2>&1
+          $verifyExitCode = $LASTEXITCODE
+          if ($verifyExitCode -ne 0) {
+            $verifyText = ($verifyOutput | Out-String)
+            if ($verifyText -match 'not trusted by the trust provider') {
+              Write-Warning "Подпись self-signed: цепочка не доверена в runner, но подпись файла присутствует."
+            } else {
+              throw "Проверка подписи завершилась ошибкой."
+            }
+          }
+          $global:LASTEXITCODE = 0
+
+      - name: Cleanup certificate files
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path certificate) {
+            Remove-Item -Path certificate -Recurse -Force
+          }
+
+      - name: Prepare release assets
+        id: release-assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+
+          $exePath = Join-Path $PWD "build\bin\game-radar.exe"
+          if (-not (Test-Path $exePath)) {
+            throw "Не найден бинарник для релиза: $exePath"
+          }
+
+          Copy-Item $exePath "release-assets\game-radar-windows-amd64.exe" -Force
+          Compress-Archive -Path "release-assets\game-radar-windows-amd64.exe" -DestinationPath "release-assets\game-radar-windows-amd64.zip" -Force
+
+          $exeHash = (Get-FileHash "release-assets\game-radar-windows-amd64.exe" -Algorithm SHA256).Hash.ToLower()
+          $zipHash = (Get-FileHash "release-assets\game-radar-windows-amd64.zip" -Algorithm SHA256).Hash.ToLower()
+          @(
+            "$exeHash  game-radar-windows-amd64.exe"
+            "$zipHash  game-radar-windows-amd64.zip"
+          ) | Out-File -FilePath "release-assets\checksums.txt" -Encoding ascii
+
+          "assets_dir=release-assets" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          append_body: true
+          body: |
+            ## Included assets
+            - Signed Windows binary: `game-radar-windows-amd64.exe`
+            - Zipped Windows binary: `game-radar-windows-amd64.zip`
+            - SHA256 checksums: `checksums.txt`
+            - Source code archives (`zip` and `tar.gz`) are attached automatically by GitHub
+          files: |
+            ${{ steps.release-assets.outputs.assets_dir }}/game-radar-windows-amd64.exe
+            ${{ steps.release-assets.outputs.assets_dir }}/game-radar-windows-amd64.zip
+            ${{ steps.release-assets.outputs.assets_dir }}/checksums.txt
+
+      - name: Upload Wails build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wails-tag-build-${{ github.ref_name }}
+          path: build/bin/**
+          if-no-files-found: error

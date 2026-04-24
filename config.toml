@@ -1,0 +1,78 @@
+language = "ru"
+
+[radar]
+  theme_name = "Default"
+  device_speakers_id = "{0.0.0.00000000}.{76eacc31-0fda-4510-92da-48fbc8b18913}"
+  intensity_filter = 0.1
+  amplifier = 1.0
+
+[logs]
+  dir = "logs"
+  [logs.backend]
+    file = "app.log"
+    level = "info"
+  [logs.wails]
+    file = "wails.log"
+    level = "info"
+    level_production = "error"
+  [logs.rotation]
+    max_size_mb = 10
+    max_backups = 5
+    max_age_days = 14
+    compress = true
+
+[themes]
+  [themes.Default]
+    name = "Default"
+    border_opacity = 0.1
+    border_width = 2
+    section_base_opacity = 0.0
+    section_bright_opacity = 1.0
+    section_timeout = 250
+    section_count = 25
+    ring_count = 3
+    show_blips = true
+    blip_opacity = 0.5
+    blip_timeout = 250
+    blip_size = 3
+    size = 320
+    pos_x = 30
+    pos_y = 30
+    intensity_multiplier = 2.0
+    [themes.Default.background_color]
+      R = 0
+      G = 20
+      B = 10
+      A = 50
+    [themes.Default.radar_color]
+      R = 0
+      G = 255
+      B = 180
+      A = 255
+  [themes.Orange]
+    name = "Orange"
+    border_opacity = 0.1
+    border_width = 2
+    section_base_opacity = 0.0
+    section_bright_opacity = 0.9
+    section_timeout = 500
+    section_count = 25
+    ring_count = 3
+    show_blips = true
+    blip_opacity = 0.5
+    blip_timeout = 500
+    blip_size = 3
+    size = 320
+    pos_x = 500
+    pos_y = 30
+    intensity_multiplier = 1.0
+    [themes.Orange.background_color]
+      R = 20
+      G = 10
+      B = 0
+      A = 100
+    [themes.Orange.radar_color]
+      R = 255
+      G = 123
+      B = 0
+      A = 255

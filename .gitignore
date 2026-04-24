@@ -1,0 +1,114 @@
+# Wails & Go build outputs
+/build/
+/build/bin/
+/build/darwin/
+/build/windows/
+!/build/
+!/build/windows/
+!/build/windows/icon.ico
+!/build/appicon.png
+!/build/icon.png
+*.exe
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.appimage
+wails.json.bak
+go.work
+go.work.sum
+vendor/
+*.test
+*.out
+*.dll
+*.so
+*.dylib
+
+# Frontend build outputs and dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.svelte-kit/
+frontend/.tailwindcss-cache
+frontend/components.json.bak
+frontend/vite.config.ts.timestamp-*
+node_modules/
+dist/
+build/
+.vite/
+.svelte-kit/
+.tailwindcss-cache
+components.json.bak
+vite.config.ts.timestamp-*
+!/build/
+!/build/windows/
+!/build/windows/icon.ico
+!/build/appicon.png
+!/build/icon.png
+
+# Logs and temp files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+*.tmp
+*.temp
+.tmp/
+.temp/
+*.pid
+*.seed
+*.pid.lock
+pids
+*.tgz
+
+# Coverage and test outputs
+coverage/
+.nyc_output
+*.lcov
+lib-cov
+
+# Editor and OS files
+.vscode/
+.cursor/
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Env files
+.env*
+frontend/.env*
+certificates/
+
+# Miscellaneous
+.cache
+.parcel-cache
+.vscode-test
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+tmp/
+temp/
+LOCAL_RELEASE_FALLBACK.md
+
+# Lock files (uncomment if you want to ignore them)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+# frontend/package-lock.json
+# frontend/yarn.lock
+# frontend/pnpm-lock.yaml

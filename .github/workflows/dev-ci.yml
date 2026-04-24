@@ -1,0 +1,81 @@
+name: Dev CI
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-lint:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend type checks
+        working-directory: frontend
+        run: npm run check
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Select Go packages for CI
+        id: go-packages
+        shell: pwsh
+        run: |
+          $packages = go list ./... | Where-Object {
+            $_ -ne "sound-radar" -and $_ -notlike "game-radar/services/audiodriver*"
+          }
+
+          if (-not $packages) {
+            throw "No Go packages selected for checks."
+          }
+
+          $joined = $packages -join " "
+          "list=$joined" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Go vet
+        shell: pwsh
+        run: go vet ${{ steps.go-packages.outputs.list }}
+
+      - name: Go tests (excluding hardware-dependent package)
+        shell: pwsh
+        run: go test ${{ steps.go-packages.outputs.list }}
+
+      - name: Install Wails CLI
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          $gobin = Join-Path (go env GOPATH) "bin"
+          $gobin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build Wails app
+        run: wails build
+
+      - name: Upload Wails build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wails-dev-build
+          path: build/bin/**
+          if-no-files-found: error
