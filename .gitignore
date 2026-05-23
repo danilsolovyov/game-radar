@@ -105,6 +105,11 @@ tmp/
 temp/
 LOCAL_RELEASE_FALLBACK.md
 
+# Certificates
+certificates/
+scripts/check-signing-cert.ps1
+Taskfile.yml
+
 # Lock files (uncomment if you want to ignore them)
 # package-lock.json
 # yarn.lock

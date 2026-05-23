@@ -45,6 +45,7 @@ func NewApp(appName, appVersion string, config *Config, logger *slog.Logger) *Ap
 			wca,
 			config.Radar.IntensityFilter,
 			config.Radar.Amplifier,
+			logger,
 		),
 		config:        config,
 		appName:       appName,

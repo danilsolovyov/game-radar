@@ -3,8 +3,8 @@ package app
 import (
 	"fmt"
 	"strings"
-	"syscall"
-	"unsafe"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 func normalizeAppLanguage(language string) string {
@@ -34,13 +34,14 @@ func (a *App) GetLanguage() string {
 }
 
 func GetSystemLocaleWindows() string {
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	proc := kernel32.NewProc("GetUserDefaultLocaleName")
-
-	buf := make([]uint16, 85)
-	ret, _, _ := proc.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	if ret == 0 {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Control Panel\International`, registry.QUERY_VALUE)
+	if err != nil {
 		return "en-US"
 	}
-	return syscall.UTF16ToString(buf)
+	defer k.Close()
+	locale, _, err := k.GetStringValue("LocaleName")
+	if err != nil || locale == "" {
+		return "en-US"
+	}
+	return locale
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"game-radar/models"
 	"game-radar/services/audiodriver"
+	"log/slog"
 	"math"
 )
 
@@ -89,15 +90,17 @@ type Radar struct {
 	history         [][]float32
 	intensityFilter float32
 	amplifier       float64
+	logger          *slog.Logger
 }
 
-func NewRadarService(audioDriver audiodriver.AudioDriver, intensityFilter float32, amplifier float64) *Radar {
+func NewRadarService(audioDriver audiodriver.AudioDriver, intensityFilter float32, amplifier float64, logger *slog.Logger) *Radar {
 	r := &Radar{
 		audioDriver:     audioDriver,
 		blipsChan:       make(chan models.Blip, channelSize),
 		history:         make([][]float32, historySize),
 		intensityFilter: intensityFilter,
 		amplifier:       amplifier,
+		logger:          logger,
 	}
 	return r
 }
@@ -153,7 +156,10 @@ func (r *Radar) calculateWeightedHistory(channelsCount uint32) []float32 {
 	}
 
 	for _, peaks := range r.history {
-		for i := range channelsCount - 1 {
+		for i := range channelsCount {
+			if int(i) >= len(peaks) {
+				break
+			}
 			weightedPeaks[i] += peaks[i]
 		}
 	}
@@ -167,10 +173,14 @@ func (r *Radar) calculateWeightedHistory(channelsCount uint32) []float32 {
 
 func (r *Radar) calculateBlip(channels []SpeakerChannel) models.Blip {
 	var sinSum, cosSum float64
+	panChannels := 0
+
 	for _, channel := range channels {
 		if channel.IsUnused {
 			continue
 		}
+
+		panChannels++
 		if channel.PeakValue < r.intensityFilter {
 			continue
 		}
@@ -180,7 +190,11 @@ func (r *Radar) calculateBlip(channels []SpeakerChannel) models.Blip {
 		cosSum += math.Cos(angle) * float64(channel.PeakValue)
 	}
 
-	count := float64(len(channels))
+	if panChannels == 0 {
+		return models.Blip{}
+	}
+
+	count := float64(panChannels)
 	sinSum /= count
 	cosSum /= count
 
@@ -193,6 +207,10 @@ func (r *Radar) calculateBlip(channels []SpeakerChannel) models.Blip {
 	blip.Angle = math.Round(blip.Angle)
 	if blip.Angle == 360 {
 		blip.Angle = 0
+	}
+
+	if blip.Intensity > 0.001 {
+		r.logger.Debug("channels", "channels", channels, "blip", blip)
 	}
 
 	return blip
